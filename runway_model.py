@@ -37,6 +37,13 @@ def inference2(model, image, raw_image=None, postprocessor=None):
     return labelmap
 
 
+def run_model(model, inputs):
+    image = np.array(inputs['image'])
+    image, raw_image = preprocessing(image, model['device'], model['config'])
+    labelmap = inference2(model['model'], image, raw_image, model['postprocessor'])
+    return labelmap
+
+
 @runway.setup(options={'checkpoint': runway.file(extension='.pth')})
 def setup(opts):
     config_path = 'configs/cocostuff164k.yaml'
@@ -64,17 +71,11 @@ def setup(opts):
     return Dict({'model': model, 'device': device, 'config': CONFIG, 'postprocessor':postprocessor})
 
 
-def run_model(model, inputs):
-    image = np.array(inputs['image'])
-    image, raw_image = preprocessing(image, model['device'], model['config'])
-    labelmap = inference2(model['model'], image, raw_image, model['postprocessor'])
-    return labelmap
 
 
 @runway.command('mask_all', inputs={'image': runway.image}, outputs={'image': runway.image})
 def mask_all(model, inputs):
     labelmap = run_model(model, inputs)
-    #labels = np.unique(labelmap)
     image_out = np.dstack([labelmap] * 3).astype(np.uint8)
     return {'image': image_out }
 
@@ -85,6 +86,13 @@ def mask_one(model, inputs):
     labelmap = np.array(labelmap==classes_list.index(inputs['class']))
     image_out = np.dstack([labelmap] * 3).astype(np.uint8)
     return {'image': image_out }
+
+
+@runway.command('detect', inputs={'image': runway.image}, outputs={'classes': runway.array(runway.text)})
+def detect(model, inputs):
+    labelmap = run_model(model, inputs)
+    labels = [classes_list[l] for l in np.unique(labelmap)]
+    return {'classes': labels }
 
 
 if __name__ == '__main__':
