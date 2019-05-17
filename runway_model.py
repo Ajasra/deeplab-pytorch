@@ -83,7 +83,7 @@ def mask_all(model, inputs):
 @runway.command('mask_one', inputs={'image': runway.image, 'class': runway.category(choices=classes_list)}, outputs={'image': runway.image})
 def mask_one(model, inputs):
     labelmap = run_model(model, inputs)
-    labelmap = np.array(labelmap==classes_list.index(inputs['class']))
+    labelmap = 255.0 * np.array(labelmap==classes_list.index(inputs['class']))
     image_out = np.dstack([labelmap] * 3).astype(np.uint8)
     return {'image': image_out }
 
