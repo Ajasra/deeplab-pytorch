@@ -9,4 +9,6 @@ files:
   ignore:
     - checkpoints/*
 build_steps:
+  - apt-get update
+  - apt-get -y install libsm6 libxrender1 libfontconfig1
   - pip install -r requirements.txt
