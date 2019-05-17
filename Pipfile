@@ -1,0 +1,27 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+
+[packages]
+click = "*"
+cython = "*"
+matplotlib = "*"
+pydensecrf = "*"
+pyyaml = "*"
+torch = "*"
+torchvision = "*"
+addict = "*"
+black = "*"
+joblib = "*"
+opencv-python = "*"
+torchnet = "*"
+tqdm = "*"
+pillow = "*"
+numpy = "*"
+runway-python = "*"
+
+[requires]
+python_version = "3.5"
