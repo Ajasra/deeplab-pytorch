@@ -95,6 +95,7 @@ def detect(model, inputs):
     return {'classes': labels }
 
 
+
 if __name__ == '__main__':
     runway.run()
 
