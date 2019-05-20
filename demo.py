@@ -17,6 +17,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import yaml
+import random
+import glob
+from tqdm import tqdm
 from addict import Dict
 
 from libs.models import *
@@ -257,6 +260,83 @@ def live(config_path, model_path, cuda, crf, camera_id):
         cv2.imshow(window_name, raw_image)
         if cv2.waitKey(10) == ord("q"):
             break
+
+
+
+
+
+@main.command()
+@click.option(
+    "-c",
+    "--config-path",
+    type=click.File(),
+    required=True,
+    help="Dataset configuration file in YAML",
+)
+@click.option(
+    "-m",
+    "--model-path",
+    type=click.Path(exists=True),
+    required=True,
+    help="PyTorch model to be loaded",
+)
+@click.option(
+    "-i",
+    "--images-path",
+    type=click.Path(exists=True),
+    required=True,
+    help="Folder of images to be processed",
+)
+@click.option(
+    "-i",
+    "--output-path",
+    type=click.Path(exists=True),
+    required=True,
+    help="Folder of images to put results in",
+)
+@click.option(
+    "--cuda/--cpu", default=True, help="Enable CUDA if available [default: --cuda]"
+)
+@click.option("--crf", is_flag=True, show_default=True, help="CRF post-processing")
+def directory(config_path, model_path, images_path, output_path, cuda, crf):
+    """
+    Inference from all images in a folder
+    """
+
+    # Setup
+    CONFIG = Dict(yaml.load(config_path))
+    device = get_device(cuda)
+    torch.set_grad_enabled(False)
+
+    classes = get_classtable(CONFIG)
+    postprocessor = setup_postprocessor(CONFIG) if crf else None
+
+    model = eval(CONFIG.MODEL.NAME)(n_classes=CONFIG.DATASET.N_CLASSES)
+    state_dict = torch.load(model_path, map_location=lambda storage, loc: storage)
+    model.load_state_dict(state_dict)
+    model.eval()
+    model.to(device)
+    print("Model:", CONFIG.MODEL.NAME)
+
+    all_colors = [[ int(255*random.random()), int(255*random.random()), int(255*random.random())] for i in range(255) ]
+
+    all_images = []
+    for ext in ['jpg', 'png']:
+        all_images.extend(glob.glob('%s/*.%s'%(images_path, ext)))
+    all_images = sorted(all_images)
+
+    for image_path in tqdm(all_images):
+        image_out = image_path.replace(images_path, output_path).replace('.jpg', '.png')
+        # Inference
+        image = cv2.imread(image_path, cv2.IMREAD_COLOR)
+        image, raw_image = preprocessing(image, device, CONFIG)
+        labelmap = inference(model, image, raw_image, postprocessor)
+        labelmap = np.dstack([labelmap]*3)
+        for c in range(len(all_colors)):
+            labelmap[labelmap[:,:,0]==c] = all_colors[c]
+        h, w = np.shape(labelmap)[0:2]
+        cv2.imwrite(image_out, labelmap.reshape((h, w, 3)))
+
 
 
 if __name__ == "__main__":
