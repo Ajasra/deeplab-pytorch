@@ -331,11 +331,12 @@ def directory(config_path, model_path, images_path, output_path, cuda, crf):
         image = cv2.imread(image_path, cv2.IMREAD_COLOR)
         image, raw_image = preprocessing(image, device, CONFIG)
         labelmap = inference(model, image, raw_image, postprocessor)
-        labelmap = np.dstack([labelmap]*3)
-        for c in range(len(all_colors)):
-            labelmap[labelmap[:,:,0]==c] = all_colors[c]
-        h, w = np.shape(labelmap)[0:2]
-        cv2.imwrite(image_out, labelmap.reshape((h, w, 3)))
+        #labelmap = np.dstack([labelmap]*3)
+        #for c in range(len(all_colors)):
+        #    labelmap[labelmap[:,:,0]==c] = all_colors[c]
+        #h, w = np.shape(labelmap)[0:2]
+        #cv2.imwrite(image_out, labelmap.reshape((h, w, 3)))
+        cv2.imwrite(image_out, labelmap)
 
 
 
