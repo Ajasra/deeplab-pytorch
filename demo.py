@@ -19,9 +19,10 @@ import torch.nn.functional as F
 import yaml
 import random
 import glob
+import os
 from tqdm import tqdm
 from addict import Dict
-
+import json
 from libs.models import *
 from libs.utils import DenseCRF
 
@@ -288,17 +289,44 @@ def live(config_path, model_path, cuda, crf, camera_id):
     help="Folder of images to be processed",
 )
 @click.option(
-    "-i",
+    "-o",
     "--output-path",
-    type=click.Path(exists=True),
+    type=click.Path(),
     required=True,
     help="Folder of images to put results in",
+)
+@click.option(
+    "-w",
+    "--width",
+    type=int,
+    required=False,
+    default=None,
+    help="force width of labelmap",
+)
+@click.option(
+    "--cuda/--cpu", default=True, help="Enable CUDA if available [default: --cuda]"
+)
+@click.option(
+    "-h",
+    "--height",
+    type=int,
+    required=False,
+    default=None,
+    help="force height of labelmap",
+)
+@click.option(
+    "-l",
+    "--classes",
+    type=str,
+    required=False,
+    default=None,
+    help="Which classes to keep and rest to merge into misc class (default keep all)",
 )
 @click.option(
     "--cuda/--cpu", default=True, help="Enable CUDA if available [default: --cuda]"
 )
 @click.option("--crf", is_flag=True, show_default=True, help="CRF post-processing")
-def directory(config_path, model_path, images_path, output_path, cuda, crf):
+def directory(config_path, model_path, images_path, output_path, width, height, classes, cuda, crf):
     """
     Inference from all images in a folder
     """
@@ -308,8 +336,21 @@ def directory(config_path, model_path, images_path, output_path, cuda, crf):
     device = get_device(cuda)
     torch.set_grad_enabled(False)
 
-    classes = get_classtable(CONFIG)
+    class_table = get_classtable(CONFIG)
     postprocessor = setup_postprocessor(CONFIG) if crf else None
+
+    if classes is not None:
+        classes = [int(c) for c in classes.split(',')]
+        misc_class = min([c for c in range(len(class_table)) if c not in classes])
+        print("keep %s" % ", ".join(["%d:%s"%(c, class_table[c]) for c in classes]))
+        print("misc class is", misc_class)
+        non_classes = [c for c in range(len(class_table)) if c not in classes and c != misc_class]
+
+    class_lookup_json = {}
+    for c in classes:
+        class_lookup_json[class_table[c]] = c
+    class_lookup_json["other"] = misc_class
+    json.dump(class_lookup_json, open('class_lookup.json', 'w'))
 
     model = eval(CONFIG.MODEL.NAME)(n_classes=CONFIG.DATASET.N_CLASSES)
     state_dict = torch.load(model_path, map_location=lambda storage, loc: storage)
@@ -318,12 +359,15 @@ def directory(config_path, model_path, images_path, output_path, cuda, crf):
     model.to(device)
     print("Model:", CONFIG.MODEL.NAME)
 
-    all_colors = [[ int(255*random.random()), int(255*random.random()), int(255*random.random())] for i in range(255) ]
+    #all_colors = [[ int(255*random.random()), int(255*random.random()), int(255*random.random())] for i in range(255) ]
 
     all_images = []
     for ext in ['jpg', 'png']:
         all_images.extend(glob.glob('%s/*.%s'%(images_path, ext)))
     all_images = sorted(all_images)
+
+    if not os.path.exists(output_path):
+        os.mkdir(output_path)
 
     for image_path in tqdm(all_images):
         image_out = image_path.replace(images_path, output_path).replace('.jpg', '.png')
@@ -331,6 +375,11 @@ def directory(config_path, model_path, images_path, output_path, cuda, crf):
         image = cv2.imread(image_path, cv2.IMREAD_COLOR)
         image, raw_image = preprocessing(image, device, CONFIG)
         labelmap = inference(model, image, raw_image, postprocessor)
+        if classes is not None:
+            for c in non_classes:
+                labelmap[labelmap==c] = misc_class
+        if width != None and height != None:
+            labelmap = cv2.resize(labelmap.astype(np.float32), dsize=(width, height), interpolation=cv2.INTER_NEAREST).astype(np.uint8)
         #labelmap = np.dstack([labelmap]*3)
         #for c in range(len(all_colors)):
         #    labelmap[labelmap[:,:,0]==c] = all_colors[c]
